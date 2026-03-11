@@ -17,8 +17,8 @@ const nix = {
   guide: "{p}youtube -v <recherche|url>\n{p}youtube -a <recherche|url>"
 };
 
-// API fixe (provenant de la commande goatbot)
-const API_BASE = "https://downvid.onrender.com/api/v1/download";
+// Nouvel endpoint
+const API_BASE = "https://downvid.onrender.com/api/fahh";
 
 async function streamFromURL(url) {
   const res = await axios({ url, responseType: "stream" });

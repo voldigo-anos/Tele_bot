@@ -7,7 +7,7 @@ module.exports = {
   nix: {
     name: "x",
     aliases: ["xvid", "video"],
-    version: "2.0.0",
+    version: "2.1.0",
     author: "Christus",
     role: 2,
     category: "media",
@@ -180,6 +180,7 @@ module.exports = {
       global.teamnix.replies.set(
         replyMsg.message_id,
         {
+          commandName: "x",
           type: "x_reply",
           authorId: msg.from.id,
           results: list,

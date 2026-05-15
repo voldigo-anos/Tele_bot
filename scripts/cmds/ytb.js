@@ -1,285 +1,174 @@
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const yts = require('yt-search');
-const moment = require('moment-timezone');
+const axios = require("axios");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { createCanvas, loadImage } = require("canvas");
+
+const API_BASE = "https://azadx69x.is-a.dev";
 
 const nix = {
-  name: "youtube",
+  name: "ytb",
   version: "1.0.0",
-  aliases: ["ytb", "yt", "video"],
-  description: "Rechercher et télécharger des vidéos/audio YouTube",
+  aliases: [],
+  description: "YouTube search + download (audio/video)",
   author: "Christus",
   prefix: true,
   category: "media",
   role: 0,
   cooldown: 5,
-  guide: "{p}youtube -v <recherche|url>\n{p}youtube -a <recherche|url>"
+  guide: "{p}yt -a <query> | {p}yt -v <query>"
 };
 
-// Nouvel endpoint
-const API_BASE = "https://downvid.onrender.com/api/fahh";
-
-async function streamFromURL(url) {
-  const res = await axios({ url, responseType: "stream" });
-  return res.data;
+function formatViews(n) {
+  if (!n) return "N/A";
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return n;
 }
 
-function buildList(videos, type, userName) {
-  const time = moment().tz("Africa/Abidjan").format("DD/MM/YYYY HH:mm");
+async function generateImage(results, query, type) {
+  const width = 640;
+  const rowH = 90;
+  const headerH = 80;
+  const height = headerH + results.length * rowH;
 
-  const list = videos
-    .map((v, i) => {
-      const duration = formatDuration(v.seconds);
-      const quality = type === "-v" ? "360p" : "128kbps";
-      return `📍 ${i + 1}. ${v.title}\n   ⏱️ ${duration} | 🎚️ ${quality}`;
-    })
-    .join("\n\n");
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
 
-  return `📺 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱𝗲𝗿\n━━━━━━━━━━━━━━\n\n` +
-    `👤 ${userName}\n` +
-    `📅 ${time}\n\n` +
-    `🎯 𝗦é𝗹𝗲𝗰𝘁𝗶𝗼𝗻𝗻𝗲𝘇 𝘂𝗻 𝗺é𝗱𝗶𝗮\n\n${list}\n\n` +
-    `━━━━━━━━━━━━━━\n` +
-    `✍️ Répondez avec un nombre (1-6)\n` +
-    `⏰ 30 secondes pour répondre`;
-}
+  ctx.fillStyle = "#181818";
+  ctx.fillRect(0, 0, width, height);
 
-function formatDuration(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 20px sans-serif";
+  ctx.fillText("YouTube Search", 20, 40);
 
-async function downloadMedia(videoUrl, type, chatId, bot, msg, fileName) {
-  try {
-    // Construction de l'URL avec les paramètres (format = mp4 ou mp3)
-    const apiUrl = `${API_BASE}?url=${encodeURIComponent(videoUrl)}&format=${type}`;
-    const { data } = await axios.get(apiUrl);
+  ctx.fillStyle = "#aaa";
+  ctx.font = "14px sans-serif";
+  ctx.fillText(`${query} (${type})`, 20, 65);
 
-    // Vérification de la réponse (format de l'API goatbot)
-    if (data.status !== "success" || !data.downloadUrl) {
-      throw new Error("Erreur API");
-    }
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const y = headerH + i * rowH;
 
-    const fileExt = type === "mp4" ? "mp4" : "mp3";
-    const filePath = path.join(__dirname, `yt_${Date.now()}.${fileExt}`);
-    
-    const writer = fs.createWriteStream(filePath);
-    const res = await axios({ url: data.downloadUrl, responseType: "stream" });
-    res.data.pipe(writer);
+    ctx.fillStyle = i % 2 ? "#1f1f1f" : "#222";
+    ctx.fillRect(0, y, width, rowH);
 
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
+    ctx.fillStyle = "#fff";
+    ctx.font = "14px sans-serif";
+    ctx.fillText(`${i + 1}. ${r.title.slice(0, 50)}`, 20, y + 30);
 
-    if (type === "mp4") {
-      await bot.sendVideo(chatId, filePath, {
-        caption: `✅ 𝗧é𝗹é𝗰𝗵𝗮𝗿𝗴𝗲𝗺𝗲𝗻𝘁 𝗿é𝘂𝘀𝘀𝗶 !\n📹 ${fileName || "Vidéo YouTube"}`,
-        reply_to_message_id: msg.message_id
-      });
-    } else {
-      await bot.sendAudio(chatId, filePath, {
-        caption: `✅ 𝗧é𝗹é𝗰𝗵𝗮𝗿𝗴𝗲𝗺𝗲𝗻𝘁 𝗿é𝘂𝘀𝘀𝗶 !\n🎵 ${fileName || "Audio YouTube"}`,
-        reply_to_message_id: msg.message_id
-      });
-    }
-
-    fs.unlinkSync(filePath);
-    return true;
-
-  } catch (error) {
-    console.error("Erreur téléchargement:", error);
-    throw error;
+    ctx.fillStyle = "#aaa";
+    ctx.fillText(`${r.duration} • ${formatViews(r.views)}`, 20, y + 55);
   }
+
+  return canvas.toBuffer("image/jpeg");
 }
 
-async function onStart({ bot, message, msg, chatId, args, usages }) {
-  const userId = msg.from.id;
-  const userName = msg.from.first_name || msg.from.username || "Utilisateur";
-  
-  const mode = args[0]?.toLowerCase();
+async function onStart({ bot, msg, chatId, args }) {
+  const flag = args[0];
   const query = args.slice(1).join(" ");
 
-  if (!mode || !["-v", "-a"].includes(mode) || !query) {
-    return usages();
+  if (!flag || !query) {
+    return bot.sendMessage(chatId, "Usage: yt -a <query> | yt -v <query>", {
+      reply_to_message_id: msg.message_id
+    });
   }
 
+  const type = flag === "-a" ? "audio" : flag === "-v" ? "video" : null;
+  if (!type) return bot.sendMessage(chatId, "Invalid type (-a / -v)");
+
+  const loading = await bot.sendMessage(chatId, "🔍 Searching...", {
+    reply_to_message_id: msg.message_id
+  });
+
   try {
-    // URL directe
-    if (query.startsWith("http")) {
-      const loadingMsg = await bot.sendMessage(chatId, 
-        "⏳ Téléchargement en cours... Veuillez patienter...",
-        { reply_to_message_id: msg.message_id }
-      );
-
-      try {
-        const fileName = query.split('v=')[1] || "YouTube";
-        await downloadMedia(
-          query,
-          mode === "-v" ? "mp4" : "mp3",
-          chatId,
-          bot,
-          msg,
-          fileName
-        );
-        
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
-        
-      } catch (error) {
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
-        return bot.sendMessage(chatId, 
-          "❌ Échec du téléchargement. Vérifiez l'URL ou réessayez plus tard.",
-          { reply_to_message_id: msg.message_id }
-        );
-      }
-      return;
-    }
-
-    // Recherche
-    const searchMsg = await bot.sendMessage(chatId, 
-      "🔍 Recherche en cours...",
-      { reply_to_message_id: msg.message_id }
+    const { data } = await axios.get(
+      `${API_BASE}/api/youtube-search?query=${encodeURIComponent(query)}&type=${type}`
     );
 
-    try {
-      const res = await yts(query);
-      const videos = res.videos.slice(0, 6);
-
-      if (videos.length === 0) {
-        await bot.deleteMessage(chatId, searchMsg.message_id);
-        return bot.sendMessage(chatId, 
-          "❌ Aucun résultat trouvé.",
-          { reply_to_message_id: msg.message_id }
-        );
-      }
-
-      // Télécharger les miniatures
-      const thumbs = [];
-      for (const video of videos) {
-        try {
-          const thumbStream = await streamFromURL(video.thumbnail);
-          const thumbPath = path.join(__dirname, `thumb_${Date.now()}_${thumbs.length}.jpg`);
-          const writer = fs.createWriteStream(thumbPath);
-          thumbStream.pipe(writer);
-          
-          await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-          
-          thumbs.push(thumbPath);
-        } catch (e) {
-          console.error("Erreur miniature:", e);
-        }
-      }
-
-      await bot.deleteMessage(chatId, searchMsg.message_id);
-
-      // Envoyer le message avec les miniatures
-      const mediaGroup = thumbs.map(thumb => ({
-        type: 'photo',
-        media: thumb
-      }));
-
-      const sentMsg = await bot.sendMediaGroup(chatId, mediaGroup, {
-        reply_to_message_id: msg.message_id
+    if (!data?.results?.length) {
+      return bot.editMessageText("No results found.", {
+        chat_id: chatId,
+        message_id: loading.message_id
       });
-
-      const lastMsgId = Array.isArray(sentMsg) ? sentMsg[sentMsg.length - 1].message_id : sentMsg.message_id;
-
-      const listMsg = await bot.sendMessage(chatId, 
-        buildList(videos, mode, userName),
-        { reply_to_message_id: msg.message_id }
-      );
-
-      // Nettoyer les miniatures
-      thumbs.forEach(thumb => {
-        try { fs.unlinkSync(thumb); } catch (e) {}
-      });
-
-      // Stocker les données pour la réponse
-      global.teamnix.replies.set(listMsg.message_id, {
-        nix,
-        type: "youtube_reply",
-        authorId: userId,
-        results: videos,
-        mode: mode,
-        searchQuery: query
-      });
-
-      // Timeout de 30 secondes
-      setTimeout(() => {
-        if (global.teamnix.replies.has(listMsg.message_id)) {
-          global.teamnix.replies.delete(listMsg.message_id);
-          bot.sendMessage(chatId, 
-            "⏰ Temps écoulé ! Veuillez relancer la commande.",
-            { reply_to_message_id: listMsg.message_id }
-          );
-        }
-      }, 30000);
-
-    } catch (error) {
-      await bot.deleteMessage(chatId, searchMsg.message_id);
-      console.error("Erreur recherche:", error);
-      return bot.sendMessage(chatId, 
-        "❌ Aucun résultat trouvé.",
-        { reply_to_message_id: msg.message_id }
-      );
     }
 
-  } catch (error) {
-    console.error("Erreur YouTube:", error);
-    return bot.sendMessage(chatId, 
-      "❌ Erreur de configuration API.",
-      { reply_to_message_id: msg.message_id }
-    );
+    const results = data.results.slice(0, 8);
+
+    const img = await generateImage(results, query, type);
+    const tmp = path.join(os.tmpdir(), `yt_${Date.now()}.jpg`);
+    fs.writeFileSync(tmp, img);
+
+    const sent = await bot.sendMessage(chatId, {
+      body: `Reply 1-${results.length} to download`,
+      attachment: fs.createReadStream(tmp)
+    });
+
+    fs.unlinkSync(tmp);
+
+    global.teamnix.replies.set(sent.message_id, {
+      nix,
+      type: "yt_reply",
+      authorId: msg.from.id,
+      results,
+      mode: type
+    });
+
+    bot.deleteMessage(chatId, loading.message_id);
+
+  } catch (e) {
+    console.log(e);
+    bot.sendMessage(chatId, "API error");
   }
 }
 
-async function onReply({ bot, message, msg, chatId, userId, data, replyMsg }) {
-  if (data.type !== "youtube_reply" || userId !== data.authorId) return;
+async function onReply({ bot, msg, chatId, userId, data }) {
+  if (data.type !== "yt_reply") return;
+  if (userId !== data.authorId) return;
 
-  const choice = parseInt(msg.text);
-  if (isNaN(choice) || choice < 1 || choice > data.results.length) {
-    return bot.sendMessage(chatId, 
-      "❌ Sélection invalide. Choisissez un nombre entre 1 et 6.",
-      { reply_to_message_id: msg.message_id }
-    );
+  const index = parseInt(msg.text);
+  if (isNaN(index) || index < 1 || index > data.results.length) {
+    return bot.sendMessage(chatId, "Invalid number");
   }
 
-  const selected = data.results[choice - 1];
-  
-  // Supprimer la référence de réponse
-  global.teamnix.replies.delete(replyMsg.message_id);
+  const selected = data.results[index - 1];
 
-  // Message de chargement
-  const loadingMsg = await bot.sendMessage(chatId, 
-    `⏳ Téléchargement de "${selected.title}"...\n⏱️ Durée: ${formatDuration(selected.seconds)}\n🎚️ Qualité: ${data.mode === "-v" ? "360p" : "128kbps"}`,
-    { reply_to_message_id: msg.message_id }
-  );
+  const loading = await bot.sendMessage(chatId, "⬇️ Downloading...");
 
   try {
-    await downloadMedia(
-      selected.url,
-      data.mode === "-v" ? "mp4" : "mp3",
-      chatId,
-      bot,
-      msg,
-      selected.title
-    );
+    const url = `${API_BASE}/api/ytdown?url=${encodeURIComponent(selected.url)}&type=${data.mode}`;
 
-    await bot.deleteMessage(chatId, loadingMsg.message_id);
+    const { data: dl } = await axios.get(url);
 
-  } catch (error) {
-    await bot.deleteMessage(chatId, loadingMsg.message_id);
-    console.error("Erreur téléchargement:", error);
-    return bot.sendMessage(chatId, 
-      "❌ Échec du téléchargement. Réessayez plus tard.",
-      { reply_to_message_id: msg.message_id }
-    );
+    const media =
+      dl?.result?.api?.mediaItems?.[0]?.mediaUrl ||
+      dl?.result?.api?.mediaItems?.[0]?.mediaPreviewUrl;
+
+    if (!media) throw new Error("No media");
+
+    const file = path.join(os.tmpdir(), `yt_${Date.now()}.mp4`);
+
+    const stream = await axios({ url: media, responseType: "stream" });
+
+    const writer = fs.createWriteStream(file);
+    stream.data.pipe(writer);
+
+    await new Promise(r => writer.on("finish", r));
+
+    await bot.sendVideo(chatId, file, {
+      caption: selected.title
+    });
+
+    fs.unlinkSync(file);
+    bot.deleteMessage(chatId, loading.message_id);
+
+    global.teamnix.replies.delete(msg.message_id);
+
+  } catch (e) {
+    console.log(e);
+    bot.sendMessage(chatId, "Download failed");
   }
 }
 
-module.exports = { onStart, onReply, nix };
+module.exports = { nix, onStart, onReply };

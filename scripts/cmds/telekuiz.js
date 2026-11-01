@@ -15,7 +15,7 @@ const nix = {
   guide: "{p}quiz <catégorie>\n{p}quiz rank - Voir votre profil\n{p}quiz leaderboard - Classement global\n{p}quiz category <cat> - Classement par catégorie\n{p}quiz daily - Défi quotidien\n{p}quiz torf - Vrai/Faux\n{p}quiz flag - Drapeaux\n{p}quiz anime - Quiz Anime\n{p}quiz cartoon - Dessins animés\n{p}quiz animaux - Animaux\n{p}quiz monument - Monuments\n{p}quiz sport - Sport\n{p}quiz cinema - Cinéma\n{p}quiz hard/medium/easy - Difficulté"
 };
 
-const BASE_URL = 'https://quiz-api-eosin-xi.vercel.app/api';
+const BASE_URL = 'https://goatmart-bwom.vercel.app/api';
 
 // ========== Gestion base de données JSON ==========
 const getDatabasePath = (dbName) => {

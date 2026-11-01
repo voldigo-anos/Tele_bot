@@ -1,11 +1,7 @@
 const axios = require("axios");
 const moment = require("moment-timezone");
 
-/* ================= CONFIG ================= */
-
-const API_ENDPOINT = "https://monster-api-18ic.onrender.com/dark";
-
-/* ================= NIX META ================= */
+const API_ENDPOINT = "https://darkgpt-api.vercel.app/api/chat";
 
 const nix = {
   name: "darkgpt",
@@ -19,8 +15,6 @@ const nix = {
   cooldown: 5,
   guide: "{p}dark <your message>",
 };
-
-/* ================= COMMAND ================= */
 
 async function onStart({ bot, message, chatId, args, event }) {
   const input = args.join(" ").trim();
@@ -39,23 +33,30 @@ async function onStart({ bot, message, chatId, args, event }) {
   );
 
   try {
-    // API expects uid, prompt, history
-    const res = await axios.post(API_ENDPOINT, {
-      uid: userId,
-      prompt: input,
-      history: [],
-    });
+    const res = await axios.post(
+      API_ENDPOINT,
+      {
+        uid: userId,
+        message: input,
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000,
+      }
+    );
 
-    const reply = res.data?.reply || "✅ Dark has responded.";
+    const reply = res.data?.reply || res.data?.response || "✅ Dark has responded.";
+    const safeReply = reply.length > 4000 ? reply.slice(0, 4000) + "…" : reply;
 
-    await bot.deleteMessage(chatId, waitMsg.message_id);
+    await bot.deleteMessage(chatId, waitMsg.message_id).catch(() => {});
 
-    await message.reply(`🌑 *Dark AI*\n━━━━━━━━━━━━━━━\n${reply}`, {
-      parse_mode: "Markdown",
-    });
+    await message.reply(
+      `🌑 *Dark AI*\n━━━━━━━━━━━━━━━\n${safeReply}`,
+      { parse_mode: "Markdown" }
+    ).catch(() => message.reply(safeReply));
 
   } catch (err) {
-    console.error("Dark AI Error:", err);
+    console.error("Dark AI Error:", err.message);
 
     await bot.editMessageText(
       "❌ Dark is temporarily unavailable.",
@@ -63,7 +64,7 @@ async function onStart({ bot, message, chatId, args, event }) {
         chat_id: chatId,
         message_id: waitMsg.message_id,
       }
-    );
+    ).catch(() => {});
   }
 }
 
